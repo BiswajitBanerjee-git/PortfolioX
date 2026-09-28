@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - PortfolioX</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700;800&family=Playfair+Display:wght@700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+<body data-page="dashboard">
+    <div id="appSection" class="app-section">
+        <nav class="navbar" aria-label="Dashboard navigation">
+            <a class="nav-brand" href="#dashboard" onclick="switchTab('dashboard'); return false;">
+                <i class="fas fa-briefcase"></i> PortfolioX
+            </a>
+            <div class="nav-tabs">
+                <button class="nav-tab" data-tab="dashboard"><i class="fas fa-th-large"></i><span>Overview</span></button>
+                <button class="nav-tab active" data-tab="profile"><i class="fas fa-user"></i><span>Profile</span></button>
+                <button class="nav-tab" data-tab="about"><i class="fas fa-align-left"></i><span>About</span></button>
+                <button class="nav-tab" data-tab="skills"><i class="fas fa-code"></i><span>Skills</span></button>
+                <button class="nav-tab" data-tab="projects"><i class="fas fa-diagram-project"></i><span>Projects</span></button>
+                <button class="nav-tab" data-tab="experience"><i class="fas fa-briefcase"></i><span>Experience</span></button>
+                <button class="nav-tab" data-tab="education"><i class="fas fa-graduation-cap"></i><span>Education</span></button>
+                <button class="nav-tab" data-tab="templates"><i class="fas fa-palette"></i><span>Templates</span></button>
+                <button class="nav-tab" data-tab="preview"><i class="fas fa-eye"></i><span>Live Preview</span></button>
+                <button class="nav-tab" data-tab="settings"><i class="fas fa-cog"></i><span>Settings</span></button>
+            </div>
+            <div class="nav-user">
+                <span id="userName" class="username"></span>
+                <button class="btn btn-small btn-secondary" type="button" onclick="logout()" title="Log out">
+                    <i class="fas fa-sign-out-alt"></i><span>Logout</span>
+                </button>
+            </div>
+        </nav>
+
+        <main class="dashboard-main">
+            <div id="dashboard" class="tab-content">
+                <div class="dashboard-header">
+                    <h2>Welcome back, <span id="dashboardName"></span></h2>
+                    <p>Your portfolio workspace</p>
+                    <div class="dashboard-quick-actions">
+                        <button class="btn btn-primary" onclick="switchTab('projects'); addProject()"><i class="fas fa-plus"></i> Add Project</button>
+                        <button class="btn btn-secondary" onclick="switchTab('experience'); addExperience()"><i class="fas fa-plus"></i> Add Experience</button>
+                        <button class="btn btn-secondary" onclick="switchTab('skills'); addSkill()"><i class="fas fa-plus"></i> Add Skill</button>
+                    </div>
+                </div>
+                <div class="dashboard-grid">
+                    <button class="dashboard-card" onclick="switchTab('profile')"><span class="card-icon profile-icon"><i class="fas fa-user"></i></span><h3>Profile</h3><p>Personal details and social links</p><span class="card-action">Edit <i class="fas fa-arrow-right"></i></span></button>
+                    <button class="dashboard-card" onclick="switchTab('skills')"><span class="card-icon skills-icon"><i class="fas fa-code"></i></span><h3>Skills</h3><p>Highlight your technical strengths</p><span class="card-action">Edit <i class="fas fa-arrow-right"></i></span></button>
+                    <button class="dashboard-card" onclick="switchTab('projects')"><span class="card-icon projects-icon"><i class="fas fa-diagram-project"></i></span><h3>Projects</h3><p>Showcase selected work</p><span class="card-action">Edit <i class="fas fa-arrow-right"></i></span></button>
+                    <button class="dashboard-card" onclick="switchTab('experience')"><span class="card-icon experience-icon"><i class="fas fa-briefcase"></i></span><h3>Experience</h3><p>Build a clear work history</p><span class="card-action">Edit <i class="fas fa-arrow-right"></i></span></button>
+                    <button class="dashboard-card" onclick="switchTab('education')"><span class="card-icon education-icon"><i class="fas fa-graduation-cap"></i></span><h3>Education</h3><p>Add your academic background</p><span class="card-action">Edit <i class="fas fa-arrow-right"></i></span></button>
+                    <button class="dashboard-card" onclick="switchTab('preview')"><span class="card-icon preview-icon"><i class="fas fa-eye"></i></span><h3>Live Preview</h3><p>Review your portfolio as you build</p><span class="card-action">Open <i class="fas fa-arrow-right"></i></span></button>
+                </div>
+            </div>
+
+            <div id="editor" class="tab-content">
+                <div class="editor-header"><h2 id="editorSectionTitle">Profile</h2></div>
+                <div class="editor-container">
+                    <div class="editor-forms">
+                        <div class="form-section active" id="profileSection">
+                            <h3><i class="fas fa-user-circle"></i> Profile information</h3>
+                            <div class="form-group">
+                                <label>Profile Picture</label>
+                                <div class="profile-picture-upload">
+                                    <input type="file" id="profilePictureInput" accept="image/*" onchange="handleProfilePictureUpload(event)">
+                                    <div class="profile-picture-preview">
+                                        <img id="profilePicturePreview" src="" alt="Profile Picture" style="display: none;">
+                                        <div class="profile-picture-placeholder" id="profilePicturePlaceholder"><i class="fas fa-camera"></i><span>Click to upload photo</span></div>
+                                    </div>
+                                    <button type="button" class="btn btn-secondary" onclick="removeProfilePicture()">Remove Picture</button>
+                                </div>
+                            </div>
+                            <div class="form-group"><label for="formName">Full Name</label><input type="text" id="formName" placeholder="Your Full Name" onchange="updatePreview()"></div>
+                            <div class="form-group"><label for="formEmail">Email</label><input type="email" id="formEmail" placeholder="your@email.com" onchange="updatePreview()"></div>
+                            <div class="form-group"><label for="formPhone">Phone</label><input type="tel" id="formPhone" placeholder="+1 (555) 123-4567" onchange="updatePreview()"></div>
+                            <div class="form-group"><label for="formLocation">Location</label><input type="text" id="formLocation" placeholder="City, Country" onchange="updatePreview()"></div>
+                            <div class="form-group"><label for="formTitle">Professional Title</label><input type="text" id="formTitle" placeholder="e.g., Full Stack Developer" onchange="updatePreview()"></div>
+                            <div class="form-section social-editor-section">
+                                <h3><i class="fas fa-link"></i> Social Links</h3>
+                                <div id="socialList" class="list-container"></div>
+                                <button type="button" class="btn btn-secondary" onclick="addSocial()">+ Add Link</button>
+                            </div>
+                        </div>
+
+                        <div class="form-section" id="aboutSection">
+                            <h3><i class="fas fa-align-left"></i> About you</h3>
+                            <div class="form-group"><label for="formBio">Bio</label><textarea id="formBio" placeholder="Tell your professional story..." onchange="updatePreview()"></textarea></div>
+                            <button type="button" class="btn btn-secondary" onclick="generateBio()"><i class="fas fa-sparkles"></i> Generate Bio</button>
+                        </div>
+
+                        <div class="form-section" id="skillsSection">
+                            <h3><i class="fas fa-code"></i> Skills</h3>
+                            <div id="skillsList" class="list-container"></div>
+                            <button type="button" class="btn btn-secondary" onclick="addSkill()">+ Add Skill</button>
+                        </div>
+
+                        <div class="form-section" id="projectsSection">
+                            <h3><i class="fas fa-diagram-project"></i> Projects</h3>
+                            <div id="projectsList" class="list-container"></div>
+                            <button type="button" class="btn btn-secondary" onclick="addProject()">+ Add Project</button>
+                        </div>
+
+                        <div class="form-section" id="experienceSection">
+                            <h3><i class="fas fa-briefcase"></i> Experience</h3>
+                            <div id="experienceList" class="list-container"></div>
+                            <button type="button" class="btn btn-secondary" onclick="addExperience()">+ Add Experience</button>
+                        </div>
+
+                        <div class="form-section" id="educationSection">
+                            <h3><i class="fas fa-graduation-cap"></i> Education</h3>
+                            <div id="educationList" class="list-container"></div>
+                            <button type="button" class="btn btn-secondary" onclick="addEducation()">+ Add Education</button>
+                        </div>
+
+                        <div class="form-section" id="templatesSection">
+                            <h3><i class="fas fa-palette"></i> Portfolio template</h3>
+                            <div class="form-group template-selector">
+                                <label for="templateSelect">Template</label>
+                                <select id="templateSelect" onchange="changeTemplate()">
+                                    <option value="modern">Modern Minimalist</option>
+                                    <option value="creative">Creative Professional</option>
+                                    <option value="elegant">Elegant Classic</option>
+                                    <option value="vibrant">Vibrant Dynamic</option>
+                                </select>
+                            </div>
+                            <p class="settings-note">Your live preview updates when you choose a template.</p>
+                        </div>
+                    </div>
+                    <aside class="editor-preview">
+                        <div class="preview-header"><h3>Live Preview</h3><span class="preview-info">Updates as you edit</span></div>
+                        <div id="livePreview" class="preview-content"></div>
+                    </aside>
+                </div>
+            </div>
+
+            <div id="preview" class="tab-content">
+                <div class="preview-header-section">
+                    <h2>Portfolio Preview</h2>
+                    <div class="preview-actions">
+                        <button class="btn btn-secondary" onclick="copyPublicUrl()"><i class="fas fa-link"></i> Copy Public Link</button>
+                        <button class="btn btn-primary" onclick="downloadPortfolio()"><i class="fas fa-download"></i> Download</button>
+                    </div>
+                </div>
+                <div id="fullPreview" class="full-preview"></div>
+            </div>
+
+            <div id="settings" class="tab-content">
+                <div class="settings-container">
+                    <h2>Settings</h2>
+                    <section class="settings-section">
+                        <h3>Account</h3>
+                        <div class="settings-item"><div class="settings-info"><h4>Email</h4><p id="settingsEmail"></p></div></div>
+                        <div class="settings-item"><div class="settings-info"><h4>Name</h4><p id="settingsName"></p></div><button class="btn btn-small btn-secondary" onclick="changePassword()">Change Password</button></div>
+                    </section>
+                    <section class="settings-section">
+                        <h3>Portfolio Theme</h3>
+                        <p class="settings-note">Choose two accents for your portfolio preview.</p>
+                        <div class="theme-controls">
+                            <label for="themePrimary">Primary accent<input type="color" id="themePrimary" value="#6253c7" onchange="changeTheme()"></label>
+                            <label for="themeSecondary">Secondary accent<input type="color" id="themeSecondary" value="#3975d5" onchange="changeTheme()"></label>
+                        </div>
+                    </section>
+                    <section class="settings-section">
+                        <h3>Save and Load</h3>
+                        <p class="settings-note">Your portfolio saves in this browser automatically. Export a backup or load a JSON backup.</p>
+                        <div class="settings-actions">
+                            <button class="btn btn-primary" onclick="savePortfolioData(); showToast('Portfolio saved', 'success')"><i class="fas fa-floppy-disk"></i> Save Now</button>
+                            <button class="btn btn-secondary" onclick="exportPortfolioData()"><i class="fas fa-download"></i> Export Backup</button>
+                            <label class="btn btn-secondary import-backup-button" for="portfolioImport"><i class="fas fa-upload"></i> Load Backup</label>
+                            <input type="file" id="portfolioImport" accept="application/json,.json" onchange="importPortfolioData(event)">
+                        </div>
+                    </section>
+                    <section class="settings-section">
+                        <h3>Portfolio Link</h3>
+                        <div class="settings-item"><div class="settings-info"><h4>Public URL</h4><p id="publicUrl" class="url-display"></p></div><button class="btn btn-small btn-secondary" onclick="copyPublicUrl()">Copy</button></div>
+                    </section>
+                    <section class="settings-section danger">
+                        <h3>Account Actions</h3>
+                        <button class="btn btn-danger" onclick="clearAllData()"><i class="fas fa-trash"></i> Clear Portfolio Data</button>
+                        <button class="btn btn-secondary" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</button>
+                    </section>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="publicModal" class="modal">
+        <div class="modal-content modal-large">
+            <button class="modal-close" onclick="closePublicModal()"><i class="fas fa-times"></i></button>
+            <div id="publicPortfolioView"></div>
+        </div>
+    </div>
+    <div id="aiModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeAiModal()"><i class="fas fa-times"></i></button>
+            <h2>AI-Powered Bio Generator</h2>
+            <p>Generate a professional bio based on your information:</p>
+            <div class="form-group"><label for="aiYears">Years of Experience</label><input type="number" id="aiYears" min="0" max="60" placeholder="5"></div>
+            <div class="form-group"><label for="aiSpecialty">Main Specialization</label><input type="text" id="aiSpecialty" placeholder="e.g., Web Development, Data Science"></div>
+            <div class="form-group"><label for="aiAchievements">Key Achievements</label><textarea id="aiAchievements" placeholder="e.g., Built 10+ production apps, Led team of 5"></textarea></div>
+            <button class="btn btn-primary btn-block" onclick="generateAiBio()"><i class="fas fa-sparkles"></i> Generate Bio</button>
+            <div id="aiOutput" class="ai-output"></div>
+        </div>
+    </div>
+    <div id="projectModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="projectModalTitle" onclick="closeProjectModal(event)">
+        <div class="modal-content project-modal-content" onclick="event.stopPropagation()">
+            <button class="modal-close" type="button" aria-label="Close project details" onclick="closeProjectModal()"><i class="fas fa-times"></i></button>
+            <div id="projectModalBody"></div>
+        </div>
+    </div>
+    <div id="toast" class="toast"></div>
+    <script src="script.js"></script>
+</body>
+</html>

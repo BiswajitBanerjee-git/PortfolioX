@@ -10,13 +10,24 @@ document.addEventListener('DOMContentLoaded', () => {
     loadDataFromStorage();
     setupEventListeners();
 
-    // Check if user is logged in
     const loggedInEmail = localStorage.getItem('loggedInUser');
-    if (loggedInEmail && app.users[loggedInEmail]) {
-        app.currentUser = app.users[loggedInEmail];
-        showAppSection();
-        loadPortfolioData();
+    const hasValidSession = loggedInEmail && app.users[loggedInEmail];
+
+    if (document.body.dataset.page !== 'dashboard') {
+        if (hasValidSession) window.location.replace('dashboard.html');
+        return;
     }
+
+    if (!hasValidSession) {
+        window.location.replace('index.html');
+        return;
+    }
+
+    app.currentUser = app.users[loggedInEmail];
+    showAppSection();
+    loadPortfolioData();
+    loadEditorContent();
+    switchTab('profile');
 });
 
 function setupEventListeners() {
@@ -48,7 +59,7 @@ function toggleAuthForm(e) {
     document.getElementById('signupForm').classList.toggle('active');
 }
 
-function handleLogin(event) {
+async function handleLogin(event) {
     event.preventDefault();
 
     const email = document.getElementById('loginEmail').value.trim();
@@ -59,9 +70,17 @@ function handleLogin(event) {
         return;
     }
 
-    if (app.users[email].password !== password) {
+    if (!await verifyPassword(password, app.users[email])) {
         showToast('Invalid email or password', 'error');
         return;
+    }
+
+    if (!app.users[email].passwordHash) {
+        const credential = await hashPassword(password);
+        app.users[email].passwordHash = credential.passwordHash;
+        app.users[email].passwordSalt = credential.passwordSalt;
+        delete app.users[email].password;
+        saveDataToStorage();
     }
 
     app.currentUser = app.users[email];
@@ -69,12 +88,11 @@ function handleLogin(event) {
     showToast('Login successful!', 'success');
 
     setTimeout(() => {
-        showAppSection();
-        loadPortfolioData();
+        window.location.assign('dashboard.html');
     }, 500);
 }
 
-function handleSignup(event) {
+async function handleSignup(event) {
     event.preventDefault();
 
     const name = document.getElementById('signupName').value.trim();
@@ -95,7 +113,7 @@ function handleSignup(event) {
     app.users[email] = {
         name,
         email,
-        password,
+        ...(await hashPassword(password)),
         createdAt: new Date().toISOString()
     };
 
@@ -108,50 +126,96 @@ function handleSignup(event) {
     }, 500);
 }
 
+async function hashPassword(password) {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const bytes = new TextEncoder().encode(password);
+    const key = await crypto.subtle.importKey('raw', bytes, 'PBKDF2', false, ['deriveBits']);
+    const digest = await crypto.subtle.deriveBits({
+        name: 'PBKDF2',
+        salt,
+        iterations: 120000,
+        hash: 'SHA-256'
+    }, key, 256);
+    return {
+        passwordSalt: Array.from(salt, byte => byte.toString(16).padStart(2, '0')).join(''),
+        passwordHash: Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
+    };
+}
+
+async function verifyPassword(password, user) {
+    if (user.passwordHash && user.passwordSalt) {
+        const salt = Uint8Array.from(user.passwordSalt.match(/.{2}/g), byte => parseInt(byte, 16));
+        const bytes = new TextEncoder().encode(password);
+        const key = await crypto.subtle.importKey('raw', bytes, 'PBKDF2', false, ['deriveBits']);
+        const digest = await crypto.subtle.deriveBits({
+            name: 'PBKDF2',
+            salt,
+            iterations: 120000,
+            hash: 'SHA-256'
+        }, key, 256);
+        const actualHash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+        return actualHash === user.passwordHash;
+    }
+    if (user.passwordHash) return false;
+    return user.password === password;
+}
+
 function logout() {
     if (confirm('Are you sure you want to logout?')) {
         localStorage.removeItem('loggedInUser');
         app.currentUser = null;
-        showToast('Logged out successfully', 'success');
-
-        setTimeout(() => {
-            showAuthSection();
-            resetForms();
-        }, 500);
+        window.location.replace('index.html');
     }
 }
 
 // ===== UI NAVIGATION =====
 function showAuthSection() {
-    document.getElementById('authSection').classList.add('active');
-    document.getElementById('appSection').classList.remove('active');
+    document.getElementById('authSection')?.classList.add('active');
+    document.getElementById('appSection')?.classList.remove('active');
 }
 
 function showAppSection() {
-    document.getElementById('authSection').classList.remove('active');
-    document.getElementById('appSection').classList.add('active');
+    document.getElementById('authSection')?.classList.remove('active');
+    document.getElementById('appSection')?.classList.add('active');
     updateUserDisplay();
 }
 
 function switchTab(tabName) {
-    // Update nav tabs
     document.querySelectorAll('.nav-tab').forEach(tab => {
         tab.classList.remove('active');
     });
-    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+    document.querySelector(`[data-tab="${tabName}"]`)?.classList.add('active');
 
-    // Update content
+    const contentTab = ['profile', 'about', 'skills', 'projects', 'experience', 'education', 'templates'].includes(tabName)
+        ? 'editor'
+        : tabName;
     document.querySelectorAll('.tab-content').forEach(content => {
         content.classList.remove('active');
     });
-    document.getElementById(tabName).classList.add('active');
+    document.getElementById(contentTab)?.classList.add('active');
 
-    // Load specific content
-    if (tabName === 'editor') {
+    const sectionMap = {
+        profile: 'profileSection',
+        about: 'aboutSection',
+        skills: 'skillsSection',
+        projects: 'projectsSection',
+        experience: 'experienceSection',
+        education: 'educationSection',
+        templates: 'templatesSection'
+    };
+    document.querySelectorAll('.editor-forms > .form-section').forEach(section => {
+        section.classList.toggle('section-current', section.id === sectionMap[tabName]);
+    });
+    const sectionTitle = document.getElementById('editorSectionTitle');
+    if (sectionTitle && sectionMap[tabName]) {
+        sectionTitle.textContent = tabName.charAt(0).toUpperCase() + tabName.slice(1);
+    }
+
+    if (contentTab === 'editor') {
         loadEditorContent();
-    } else if (tabName === 'preview') {
+    } else if (contentTab === 'preview') {
         loadFullPreview();
-    } else if (tabName === 'settings') {
+    } else if (contentTab === 'settings') {
         loadSettings();
     }
 }
@@ -187,8 +251,10 @@ function getDefaultPortfolio() {
         skills: [],
         experience: [],
         projects: [],
+        education: [],
         social: [],
-        template: 'modern'
+        template: 'modern',
+        theme: { primary: '#6253c7', secondary: '#3975d5' }
     };
 }
 
@@ -215,9 +281,69 @@ function savePortfolioData() {
     portfolio.title = document.getElementById('formTitle').value;
     portfolio.bio = document.getElementById('formBio').value;
     portfolio.template = document.getElementById('templateSelect').value;
+    portfolio.theme = {
+        primary: document.getElementById('themePrimary').value,
+        secondary: document.getElementById('themeSecondary').value
+    };
 
     saveDataToStorage();
+}
+
+function changeTemplate() {
+    savePortfolioData();
     updatePreview();
+}
+
+function changeTheme() {
+    const portfolio = getPortfolioData();
+    portfolio.theme = {
+        primary: document.getElementById('themePrimary').value,
+        secondary: document.getElementById('themeSecondary').value
+    };
+    document.documentElement.style.setProperty('--primary', portfolio.theme.primary);
+    document.documentElement.style.setProperty('--secondary', portfolio.theme.secondary);
+    saveDataToStorage();
+    updatePreview();
+}
+
+function exportPortfolioData() {
+    const blob = new Blob([JSON.stringify(getPortfolioData(), null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'portfolio-backup.json';
+    link.click();
+    URL.revokeObjectURL(url);
+}
+
+function importPortfolioData(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+        try {
+            const imported = JSON.parse(reader.result);
+            const requiredArrays = ['skills', 'experience', 'projects', 'social'];
+            if (!imported || typeof imported !== 'object' || requiredArrays.some(key => imported[key] && !Array.isArray(imported[key]))) {
+                throw new Error('Invalid portfolio data');
+            }
+            app.portfolios[app.currentUser.email] = {
+                ...getDefaultPortfolio(),
+                ...imported,
+                email: app.currentUser.email,
+                education: Array.isArray(imported.education) ? imported.education : [],
+                theme: imported.theme || { primary: '#6253c7', secondary: '#3975d5' }
+            };
+            saveDataToStorage();
+            loadEditorContent();
+            showToast('Portfolio backup loaded', 'success');
+        } catch (error) {
+            showToast('That backup file could not be loaded', 'error');
+        }
+        event.target.value = '';
+    };
+    reader.readAsText(file);
 }
 
 // ===== EDITOR CONTENT =====
@@ -241,7 +367,14 @@ function loadEditorContent() {
     loadSkillsList();
     loadExperienceList();
     loadProjectsList();
+    loadEducationList();
     loadSocialList();
+
+    const theme = portfolio.theme || { primary: '#6253c7', secondary: '#3975d5' };
+    document.documentElement.style.setProperty('--primary', theme.primary);
+    document.documentElement.style.setProperty('--secondary', theme.secondary);
+    document.getElementById('themePrimary').value = theme.primary;
+    document.getElementById('themeSecondary').value = theme.secondary;
 
     updatePreview();
 }
@@ -256,7 +389,7 @@ function loadSkillsList() {
         const skillItem = document.createElement('div');
         skillItem.className = 'list-item';
         skillItem.innerHTML = `
-            <input type="text" value="${skill}" onchange="updateSkill(${index}, this.value)">
+            <input type="text" value="${skill}" placeholder="Skill name" onchange="updateSkill(${index}, this.value)">
             <button onclick="removeSkill(${index})">Delete</button>
         `;
         skillsList.appendChild(skillItem);
@@ -269,12 +402,32 @@ function addSkill() {
     savePortfolioData();
     loadSkillsList();
     updatePreview();
+    openEditorSection('skillsSection', '#skillsList input:last-of-type');
+}
+
+function openEditorSection(sectionId, focusSelector) {
+    const tabBySection = {
+        profileSection: 'profile',
+        aboutSection: 'about',
+        skillsSection: 'skills',
+        projectsSection: 'projects',
+        experienceSection: 'experience',
+        educationSection: 'education',
+        templatesSection: 'templates'
+    };
+    switchTab(tabBySection[sectionId] || 'profile');
+    requestAnimationFrame(() => {
+        const section = document.getElementById(sectionId);
+        section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        section?.querySelector(focusSelector)?.focus();
+    });
 }
 
 function updateSkill(index, value) {
     const portfolio = getPortfolioData();
     portfolio.skills[index] = value;
     savePortfolioData();
+    updatePreview();
 }
 
 function removeSkill(index) {
@@ -282,6 +435,7 @@ function removeSkill(index) {
     portfolio.skills.splice(index, 1);
     savePortfolioData();
     loadSkillsList();
+    updatePreview();
 }
 
 // ===== EXPERIENCE MANAGEMENT =====
@@ -298,6 +452,7 @@ function loadExperienceList() {
                 <input type="text" placeholder="Job Title" value="${exp.title}" onchange="updateExperience(${index}, 'title', this.value)" style="margin-bottom: 8px;">
                 <input type="text" placeholder="Company" value="${exp.company}" onchange="updateExperience(${index}, 'company', this.value)" style="margin-bottom: 8px;">
                 <input type="text" placeholder="Duration" value="${exp.duration}" onchange="updateExperience(${index}, 'duration', this.value)">
+                <textarea placeholder="Role highlights" onchange="updateExperience(${index}, 'description', this.value)" style="margin-top: 8px;">${exp.description || ''}</textarea>
             </div>
             <button onclick="removeExperience(${index})" style="margin-left: 10px;">Delete</button>
         `;
@@ -311,12 +466,14 @@ function addExperience() {
     savePortfolioData();
     loadExperienceList();
     updatePreview();
+    openEditorSection('experienceSection', '#experienceList input');
 }
 
 function updateExperience(index, field, value) {
     const portfolio = getPortfolioData();
     portfolio.experience[index][field] = value;
     savePortfolioData();
+    updatePreview();
 }
 
 function removeExperience(index) {
@@ -324,6 +481,53 @@ function removeExperience(index) {
     portfolio.experience.splice(index, 1);
     savePortfolioData();
     loadExperienceList();
+    updatePreview();
+}
+
+// ===== EDUCATION MANAGEMENT =====
+function loadEducationList() {
+    const portfolio = getPortfolioData();
+    const educationList = document.getElementById('educationList');
+    educationList.innerHTML = '';
+
+    portfolio.education = portfolio.education || [];
+    portfolio.education.forEach((education, index) => {
+        const item = document.createElement('div');
+        item.className = 'list-item';
+        item.innerHTML = `
+            <div style="flex: 1;">
+                <input type="text" placeholder="Degree or qualification" value="${education.degree || ''}" onchange="updateEducation(${index}, 'degree', this.value)" style="margin-bottom: 8px;">
+                <input type="text" placeholder="School or institution" value="${education.school || ''}" onchange="updateEducation(${index}, 'school', this.value)" style="margin-bottom: 8px;">
+                <input type="text" placeholder="Years attended" value="${education.duration || ''}" onchange="updateEducation(${index}, 'duration', this.value)" style="margin-bottom: 8px;">
+                <textarea placeholder="Additional details" onchange="updateEducation(${index}, 'description', this.value)">${education.description || ''}</textarea>
+            </div>
+            <button onclick="removeEducation(${index})">Delete</button>
+        `;
+        educationList.appendChild(item);
+    });
+}
+
+function addEducation() {
+    const portfolio = getPortfolioData();
+    portfolio.education = portfolio.education || [];
+    portfolio.education.push({ degree: 'Degree or qualification', school: 'Institution name', duration: '', description: '' });
+    savePortfolioData();
+    loadEducationList();
+    updatePreview();
+    openEditorSection('educationSection', '#educationList input');
+}
+
+function updateEducation(index, field, value) {
+    getPortfolioData().education[index][field] = value;
+    savePortfolioData();
+    updatePreview();
+}
+
+function removeEducation(index) {
+    getPortfolioData().education.splice(index, 1);
+    savePortfolioData();
+    loadEducationList();
+    updatePreview();
 }
 
 // ===== PROJECTS MANAGEMENT =====
@@ -339,7 +543,9 @@ function loadProjectsList() {
             <div style="flex: 1;">
                 <input type="text" placeholder="Project Title" value="${project.title}" onchange="updateProject(${index}, 'title', this.value)" style="margin-bottom: 8px;">
                 <input type="text" placeholder="Description" value="${project.description}" onchange="updateProject(${index}, 'description', this.value)" style="margin-bottom: 8px;">
+                <button type="button" class="btn btn-small btn-secondary" onclick="generateProjectDescription(${index})" style="margin-bottom: 8px;"><i class="fas fa-sparkles"></i> Generate Description</button>
                 <input type="text" placeholder="Technology" value="${project.tech}" onchange="updateProject(${index}, 'tech', this.value)" style="margin-bottom: 8px;">
+                <textarea placeholder="Project features (one per line)" onchange="updateProject(${index}, 'features', this.value)" style="margin-bottom: 8px;">${Array.isArray(project.features) ? project.features.join('\n') : (project.features || '')}</textarea>
                 <input type="url" placeholder="GitHub URL" value="${project.github || ''}" onchange="updateProject(${index}, 'github', this.value)" style="margin-bottom: 8px;">
                 <input type="url" placeholder="Demo URL" value="${project.demo || ''}" onchange="updateProject(${index}, 'demo', this.value)">
             </div>
@@ -351,16 +557,30 @@ function loadProjectsList() {
 
 function addProject() {
     const portfolio = getPortfolioData();
-    portfolio.projects.push({ title: 'New Project', tech: 'Technologies used', description: 'Project description', github: '', demo: '' });
+    portfolio.projects.push({ title: 'New Project', tech: 'Technologies used', description: 'Project description', features: '', github: '', demo: '' });
     savePortfolioData();
     loadProjectsList();
     updatePreview();
+    openEditorSection('projectsSection', '#projectsList input');
 }
 
 function updateProject(index, field, value) {
     const portfolio = getPortfolioData();
     portfolio.projects[index][field] = value;
     savePortfolioData();
+    updatePreview();
+}
+
+function generateProjectDescription(index) {
+    const project = getPortfolioData().projects[index];
+    const title = project.title && project.title !== 'New Project' ? project.title : 'This project';
+    const technologies = (project.tech || '').trim();
+    const technologyText = technologies && technologies !== 'Technologies used' ? ` using ${technologies}` : '';
+    project.description = `${title} is a thoughtfully built solution${technologyText}, designed to deliver a clear and reliable user experience.`;
+    savePortfolioData();
+    loadProjectsList();
+    updatePreview();
+    showToast('Project description generated', 'success');
 }
 
 function removeProject(index) {
@@ -368,6 +588,7 @@ function removeProject(index) {
     portfolio.projects.splice(index, 1);
     savePortfolioData();
     loadProjectsList();
+    updatePreview();
 }
 
 // ===== SOCIAL LINKS MANAGEMENT =====
@@ -402,6 +623,7 @@ function updateSocial(index, field, value) {
     const portfolio = getPortfolioData();
     portfolio.social[index][field] = value;
     savePortfolioData();
+    updatePreview();
 }
 
 function removeSocial(index) {
@@ -409,6 +631,7 @@ function removeSocial(index) {
     portfolio.social.splice(index, 1);
     savePortfolioData();
     loadSocialList();
+    updatePreview();
 }
 
 // ===== PROFILE PICTURE HANDLING =====
@@ -499,6 +722,7 @@ function generatePortfolioHTML(isPreview = false) {
                     <div class="portfolio-item">
                         <div class="portfolio-item-title">${exp.title}</div>
                         <div class="portfolio-item-subtitle">${exp.company}${exp.duration ? ` • ${exp.duration}` : ''}</div>
+                        ${exp.description ? `<div class="portfolio-item-description">${exp.description}</div>` : ''}
                     </div>
                 `;
             }
@@ -506,19 +730,29 @@ function generatePortfolioHTML(isPreview = false) {
         html += `</div>`;
     }
 
+    if (portfolio.education && portfolio.education.length > 0) {
+        html += `<div class="portfolio-section"><div class="portfolio-section-title">Education</div>`;
+        portfolio.education.forEach(education => {
+            if (education.degree || education.school) {
+                html += `<div class="portfolio-item"><div class="portfolio-item-title">${education.degree || ''}</div><div class="portfolio-item-subtitle">${education.school || ''}${education.duration ? ` • ${education.duration}` : ''}</div>${education.description ? `<div class="portfolio-item-description">${education.description}</div>` : ''}</div>`;
+            }
+        });
+        html += `</div>`;
+    }
+
     // Projects
     if (portfolio.projects.length > 0) {
-        html += `<div class="portfolio-section"><div class="portfolio-section-title">Projects</div>`;
-        portfolio.projects.forEach(project => {
+        html += `<div class="portfolio-section portfolio-projects-section"><div class="portfolio-section-title">Projects</div>`;
+        portfolio.projects.forEach((project, index) => {
             if (project.title) {
+                const technologies = (project.tech || '').split(',').map(item => item.trim()).filter(Boolean);
                 html += `
-                    <div class="portfolio-item">
+                    <button type="button" class="portfolio-project-card" onclick="openProjectModal(${index})" aria-label="View details for ${project.title}">
+                        <span class="project-card-topline"><span class="project-card-icon"><i class="fas fa-code"></i></span><i class="fas fa-arrow-up-right-from-square project-card-arrow"></i></span>
                         <div class="portfolio-item-title">${project.title}</div>
-                        <div class="portfolio-item-subtitle">${project.tech}</div>
-                        <div class="portfolio-item-description">${project.description}</div>
-                        ${project.github ? `<div class="project-link"><i class="fab fa-github"></i> <a href="${project.github}" target="_blank">View on GitHub</a></div>` : ''}
-                        ${project.demo ? `<div class="project-link"><i class="fas fa-external-link-alt"></i> <a href="${project.demo}" target="_blank">Live Demo</a></div>` : ''}
-                    </div>
+                        <div class="portfolio-item-description">${project.description || 'Explore the project details.'}</div>
+                        <span class="project-tech-list">${technologies.slice(0, 4).map(tech => `<span class="project-tech-tag">${tech}</span>`).join('')}</span>
+                    </button>
                 `;
             }
         });
@@ -546,6 +780,34 @@ function generatePortfolioHTML(isPreview = false) {
 
     html += `</div>`;
     return html;
+}
+
+function openProjectModal(index) {
+    const project = getPortfolioData().projects[index];
+    if (!project) return;
+
+    const features = Array.isArray(project.features)
+        ? project.features
+        : (project.features || '').split('\n').map(feature => feature.trim()).filter(Boolean);
+    const technologies = (project.tech || '').split(',').map(item => item.trim()).filter(Boolean);
+    document.getElementById('projectModalBody').innerHTML = `
+        <span class="project-modal-eyebrow"><i class="fas fa-code"></i> Featured project</span>
+        <h2 id="projectModalTitle">${project.title || 'Project details'}</h2>
+        <p class="project-modal-description">${project.description || 'No description added yet.'}</p>
+        ${features.length ? `<section class="project-modal-section"><h3>Features</h3><ul>${features.map(feature => `<li>${feature}</li>`).join('')}</ul></section>` : ''}
+        ${technologies.length ? `<section class="project-modal-section"><h3>Technologies</h3><div class="project-tech-list">${technologies.map(tech => `<span class="project-tech-tag">${tech}</span>`).join('')}</div></section>` : ''}
+        <div class="project-modal-actions">
+            ${project.github ? `<a class="btn btn-secondary" href="${project.github}" target="_blank" rel="noopener noreferrer"><i class="fab fa-github"></i> GitHub</a>` : ''}
+            ${project.demo ? `<a class="btn btn-primary" href="${project.demo}" target="_blank" rel="noopener noreferrer"><i class="fas fa-arrow-up-right-from-square"></i> Live demo</a>` : ''}
+        </div>
+    `;
+    document.getElementById('projectModal').classList.add('active');
+    document.querySelector('#projectModal .modal-close').focus();
+}
+
+function closeProjectModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    document.getElementById('projectModal').classList.remove('active');
 }
 
 function getSocialIcon(platform) {
@@ -792,6 +1054,20 @@ function downloadPortfolio() {
                 <div class="portfolio-item">
                     <div class="portfolio-item-title">${exp.title}</div>
                     <div class="portfolio-item-subtitle">${exp.company}${exp.duration ? ` • ${exp.duration}` : ''}</div>
+                    ${exp.description ? `<div class="portfolio-item-description">${exp.description}</div>` : ''}
+                </div>
+            `).join('')}
+        </div>
+        ` : ''}
+
+        ${portfolio.education && portfolio.education.length > 0 ? `
+        <div class="portfolio-section">
+            <div class="portfolio-section-title">Education</div>
+            ${portfolio.education.map(education => `
+                <div class="portfolio-item">
+                    <div class="portfolio-item-title">${education.degree || ''}</div>
+                    <div class="portfolio-item-subtitle">${education.school || ''}${education.duration ? ` • ${education.duration}` : ''}</div>
+                    ${education.description ? `<div class="portfolio-item-description">${education.description}</div>` : ''}
                 </div>
             `).join('')}
         </div>
@@ -889,7 +1165,7 @@ function clearAllData() {
 
 // Keyboard shortcuts
 document.addEventListener('keydown', (e) => {
-    if (e.ctrlKey && e.key === 's') {
+    if (document.body.dataset.page === 'dashboard' && e.ctrlKey && e.key === 's') {
         e.preventDefault();
         savePortfolioData();
         showToast('Portfolio saved!', 'success');
